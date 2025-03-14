@@ -28,8 +28,48 @@ tensor = torch.rand(3, 4)
 # print(tensor.dtype)
 # print(tensor.device)
 
-if torch.cuda.is_available():
-	tensor = torch.to('cuda')
-	print(f"Device tensor is stored on : {tensor.device}")
-else:
-	print(f"Device tensor is stored on : {tensor.device}")
+# if torch.cuda.is_available():
+# 	tensor = torch.to('cuda')
+# 	print(f"Device tensor is stored on : {tensor.device}")
+# else:
+# 	print(f"Device tensor is stored on : {tensor.device}")
+
+
+tensor = torch.ones(4, 4)
+tensor[:, 1] = 0
+# print(tensor)
+
+
+t1 = torch.cat([tensor, tensor, tensor], dim=1) # dim = 0は行方向にconcatenate
+# print(t1)
+
+# アダマール積
+# print(f"tensor.mul(tensor) \n {tensor.mul(tensor)} \n")
+# print(f"tensor * tensor \n {tensor * tensor}")
+
+# 行列積
+# print(f"tensor.matmul(tensor.T) \n {tensor.matmul(tensor.T)} \n")
+# print(f"tensor @ tensor.T \n {tensor @ tensor.T}")
+
+# in-place 操作 (上書き)
+# print(tensor, "\n")
+# tensor.add_(5)
+# print(tensor)
+
+# in-placeはメモリを節約できるが、微分を計算するときに、履歴が即座に失われるから推奨されない
+
+# t = torch.ones(5)
+# print(f"t: {t}")
+# n = t.numpy()
+# print(f"n: {n}")
+
+# t.add_(1)
+# print(f"t: {t}")
+# print(f"n: {n}")
+
+n = np.ones(5)
+t = torch.from_numpy(n)
+
+np.add(n, 1, out=n)
+print(f"t: {t}")
+print(f"n: {n}")

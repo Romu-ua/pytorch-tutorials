@@ -1,2 +1,8 @@
 Deep Learning with PyTorch: A 60 Minute Blitz
 https://pytorch.org/tutorials/beginner/deep_learning_60min_blitz.html
+
+チュートリアルごとにファイルを作成して命名
+Tensors
+A Gentle Introduction to torch.autograd
+Neural Networks
+Training a Classifier
