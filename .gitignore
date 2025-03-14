@@ -1,3 +1,5 @@
 .env
 /a-PyTorch-Tutorial-to-Transformers/
 /Deep_Learning_with_PyTorch/data/
+/Transformers/transformer_data/
+/Transformers/__pycache__/
