@@ -51,119 +51,119 @@ class MultiHeadAttention(nn.Module):
         self.apply_dropout = nn.Dropout(dropout)
 
 
-	def forward(self, query_sequences, key_value_sequences, key_value_sequence_lengths):
-		"""
-		順伝播（フォワードプロパゲーション）を行う関数
+    def forward(self, query_sequences, key_value_sequences, key_value_sequence_lengths):
+        """
+        順伝播（フォワードプロパゲーション）を行う関数
 
-		:param query_sequences: 入力のクエリシーケンス（テンソルサイズ: (N, クエリのパッド長, d_model)）
-		:param key_value_sequences: クエリ対象となるシーケンス（テンソルサイズ: (N, キー・バリューのパッド長, d_model)）
-		:param key_value_sequence_lengths: キー・バリューシーケンスの実際の長さ（パディングを無視するため、テンソルサイズ: (N)）
-		:return: クエリシーケンスに対して注意重み付けされた出力シーケンス（テンソルサイズ: (N, クエリのパッド長, d_model)）
-		"""
-		batch_size = query_sequences.size(0)  # バッチサイズ (N)
-		query_sequence_pad_length = query_sequences.size(1)  # クエリシーケンスのパッド長
-		key_value_sequence_pad_length = key_value_sequences.size(1)  # キー・バリューシーケンスのパッド長
+        :param query_sequences: 入力のクエリシーケンス（テンソルサイズ: (N, クエリのパッド長, d_model)）
+        :param key_value_sequences: クエリ対象となるシーケンス（テンソルサイズ: (N, キー・バリューのパッド長, d_model)）
+        :param key_value_sequence_lengths: キー・バリューシーケンスの実際の長さ（パディングを無視するため、テンソルサイズ: (N)）
+        :return: クエリシーケンスに対して注意重み付けされた出力シーケンス（テンソルサイズ: (N, クエリのパッド長, d_model)）
+        """	
+        batch_size = query_sequences.size(0)  # バッチサイズ (N)
+        query_sequence_pad_length = query_sequences.size(1)  # クエリシーケンスのパッド長
+        key_value_sequence_pad_length = key_value_sequences.size(1)  # キー・バリューシーケンスのパッド長
 
-		# これは自己注意かどうか判定
-		self_attention = torch.equal(key_value_sequences, query_sequences)
+        # これは自己注意かどうか判定
+        self_attention = torch.equal(key_value_sequences, query_sequences)
 
-		# 後で残差接続のために入力を保存
-		input_to_add = query_sequences.clone()
+        # 後で残差接続のために入力を保存
+        input_to_add = query_sequences.clone()
 
-		# レイヤ正規化を適用
-		query_sequences = self.layer_norm(query_sequences)  # (N, クエリのパッド長, d_model)
-		# 自己注意の場合、キー・バリューシーケンスにも同じ正規化を適用する
-		# 自己注意でない場合は、エンコーダの最終層で既に正規化されている
-		if self_attention:
-			key_value_sequences = self.layer_norm(key_value_sequences)  # (N, キー・バリューのパッド長, d_model)
+        # レイヤ正規化を適用
+        query_sequences = self.layer_norm(query_sequences)  # (N, クエリのパッド長, d_model)
+        # 自己注意の場合、キー・バリューシーケンスにも同じ正規化を適用する
+        # 自己注意でない場合は、エンコーダの最終層で既に正規化されている
+        if self_attention:
+            key_value_sequences = self.layer_norm(key_value_sequences)  # (N, キー・バリューのパッド長, d_model)
 
-		# 入力シーケンスをクエリ、キー、バリューに射影
-		queries = self.cast_queries(query_sequences)  # (N, クエリのパッド長, n_heads * d_queries)
-		keys, values = self.cast_keys_values(key_value_sequences).split(split_size=self.n_heads * self.d_keys,
-																		dim=-1)
-		# keys: (N, キー・バリューのパッド長, n_heads * d_keys)
-		# values: (N, キー・バリューのパッド長, n_heads * d_values)
+        # 入力シーケンスをクエリ、キー、バリューに射影
+        queries = self.cast_queries(query_sequences)  # (N, クエリのパッド長, n_heads * d_queries)
+        keys, values = self.cast_keys_values(key_value_sequences).split(split_size=self.n_heads * self.d_keys,
+                                                                        dim=-1)
+        # keys: (N, キー・バリューのパッド長, n_heads * d_keys)
+        # values: (N, キー・バリューのパッド長, n_heads * d_values)
 
-		# 最後の次元を n_heads 個のサブスペースに分割する
-		queries = queries.contiguous().view(batch_size, query_sequence_pad_length, self.n_heads, self.d_queries)
-		# (N, クエリのパッド長, n_heads, d_queries)
-		keys = keys.contiguous().view(batch_size, key_value_sequence_pad_length, self.n_heads, self.d_keys)
-		# (N, キー・バリューのパッド長, n_heads, d_keys)
-		values = values.contiguous().view(batch_size, key_value_sequence_pad_length, self.n_heads, self.d_values)
-		# (N, キー・バリューのパッド長, n_heads, d_values)
+        # 最後の次元を n_heads 個のサブスペースに分割する
+        queries = queries.contiguous().view(batch_size, query_sequence_pad_length, self.n_heads, self.d_queries)
+        # (N, クエリのパッド長, n_heads, d_queries)
+        keys = keys.contiguous().view(batch_size, key_value_sequence_pad_length, self.n_heads, self.d_keys)
+        # (N, キー・バリューのパッド長, n_heads, d_keys)
+        values = values.contiguous().view(batch_size, key_value_sequence_pad_length, self.n_heads, self.d_values)
+        # (N, キー・バリューのパッド長, n_heads, d_values)
 
-		# 軸を入れ替えて、最後の2次元がシーケンス長とクエリ/キー/バリューの次元になるようにする
-		# その後、バッチ次元とヘッド次元を統合して3次元テンソルに変換（バッチ行列積のための準備）
-		queries = queries.permute(0, 2, 1, 3).contiguous().view(-1, query_sequence_pad_length, self.d_queries)
-		# (N * n_heads, クエリのパッド長, d_queries)
-		keys = keys.permute(0, 2, 1, 3).contiguous().view(-1, key_value_sequence_pad_length, self.d_keys)
-		# (N * n_heads, キー・バリューのパッド長, d_keys)
-		values = values.permute(0, 2, 1, 3).contiguous().view(-1, key_value_sequence_pad_length, self.d_values)
-		# (N * n_heads, キー・バリューのパッド長, d_values)
+        # 軸を入れ替えて、最後の2次元がシーケンス長とクエリ/キー/バリューの次元になるようにする
+        # その後、バッチ次元とヘッド次元を統合して3次元テンソルに変換（バッチ行列積のための準備）
+        queries = queries.permute(0, 2, 1, 3).contiguous().view(-1, query_sequence_pad_length, self.d_queries)
+        # (N * n_heads, クエリのパッド長, d_queries)
+        keys = keys.permute(0, 2, 1, 3).contiguous().view(-1, key_value_sequence_pad_length, self.d_keys)
+        # (N * n_heads, キー・バリューのパッド長, d_keys)
+        values = values.permute(0, 2, 1, 3).contiguous().view(-1, key_value_sequence_pad_length, self.d_values)
+        # (N * n_heads, キー・バリューのパッド長, d_values)
 
-		# マルチヘッド注意を実行
+        # マルチヘッド注意を実行
 
-		# ドット積計算を実施
-		attention_weights = torch.bmm(queries, keys.permute(0, 2, 1))
-		# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        # ドット積計算を実施
+        attention_weights = torch.bmm(queries, keys.permute(0, 2, 1))
+        # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
 
-		# ドット積のスケーリング
-		attention_weights = (1. / math.sqrt(self.d_keys)) * attention_weights
-		# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        # ドット積のスケーリング
+        attention_weights = (1. / math.sqrt(self.d_keys)) * attention_weights
+        # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
 
-		# ソフトマックスを計算する前に、特定のキーへのアテンションを抑制するための処理
+        # ソフトマックスを計算する前に、特定のキーへのアテンションを抑制するための処理
 
-		# マスク 1: パッドとなっているキーの位置をマスクする
-		not_pad_in_keys = torch.LongTensor(range(key_value_sequence_pad_length)).unsqueeze(0).unsqueeze(0).expand_as(attention_weights).to(device)
-		# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
-		not_pad_in_keys = not_pad_in_keys < key_value_sequence_lengths.repeat_interleave(self.n_heads).unsqueeze(1).unsqueeze(2).expand_as(attention_weights)
-		# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
-		# 注意: PyTorchは比較演算においてsingleton次元を自動ブロードキャストする
+        # マスク 1: パッドとなっているキーの位置をマスクする
+        not_pad_in_keys = torch.LongTensor(range(key_value_sequence_pad_length)).unsqueeze(0).unsqueeze(0).expand_as(attention_weights).to(device)
+        # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        not_pad_in_keys = not_pad_in_keys < key_value_sequence_lengths.repeat_interleave(self.n_heads).unsqueeze(1).unsqueeze(2).expand_as(attention_weights)
+        # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        # 注意: PyTorchは比較演算においてsingleton次元を自動ブロードキャストする
 
-		# マスク対象の重みを非常に大きな負の値に設定し、ソフトマックス後にゼロとなるようにする
-		attention_weights = attention_weights.masked_fill(~not_pad_in_keys, -float('inf'))
-		# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        # マスク対象の重みを非常に大きな負の値に設定し、ソフトマックス後にゼロとなるようにする
+        attention_weights = attention_weights.masked_fill(~not_pad_in_keys, -float('inf'))
+        # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
 
-		# マスク 2: デコーダ内の自己注意の場合、クエリより未来のキー（後続の単語）をマスクする
-		if self.in_decoder and self_attention:
-			# 位置 [n, i, j] が有効なのは、 j <= i の場合のみ
-			# torch.tril() を使い、下三角行列を抽出することで j > i の位置を0に設定する
-			not_future_mask = torch.ones_like(attention_weights).tril().bool().to(device)
-			# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        # マスク 2: デコーダ内の自己注意の場合、クエリより未来のキー（後続の単語）をマスクする
+        if self.in_decoder and self_attention:
+            # 位置 [n, i, j] が有効なのは、 j <= i の場合のみ
+            # torch.tril() を使い、下三角行列を抽出することで j > i の位置を0に設定する
+            not_future_mask = torch.ones_like(attention_weights).tril().bool().to(device)
+            # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
 
-			# マスク対象の重みを非常に大きな負の値に設定する
-			attention_weights = attention_weights.masked_fill(~not_future_mask, -float('inf'))
-			# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+            # マスク対象の重みを非常に大きな負の値に設定する
+            attention_weights = attention_weights.masked_fill(~not_future_mask, -float('inf'))
+            # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
 
-		# キー方向に沿ってソフトマックスを計算
-		attention_weights = self.softmax(attention_weights)
-		# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        # キー方向に沿ってソフトマックスを計算
+        attention_weights = self.softmax(attention_weights)
+        # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
 
-		# ドロップアウトを適用
-		attention_weights = self.apply_dropout(attention_weights)
-		# (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
+        # ドロップアウトを適用
+        attention_weights = self.apply_dropout(attention_weights)
+        # (N * n_heads, クエリのパッド長, キー・バリューのパッド長)
 
-		# ソフトマックスの重みを用いてバリューの加重和を計算（注意の出力シーケンスを得る）
-		sequences = torch.bmm(attention_weights, values)
-		# (N * n_heads, クエリのパッド長, d_values)
+        # ソフトマックスの重みを用いてバリューの加重和を計算（注意の出力シーケンスを得る）
+        sequences = torch.bmm(attention_weights, values)
+        # (N * n_heads, クエリのパッド長, d_values)
 
-		# バッチ次元とヘッド次元を統合して元の軸の順序に戻す
-		sequences = sequences.contiguous().view(batch_size, self.n_heads, query_sequence_pad_length, self.d_values).permute(0, 2, 1, 3)
-		# (N, クエリのパッド長, n_heads, d_values)
+        # バッチ次元とヘッド次元を統合して元の軸の順序に戻す
+        sequences = sequences.contiguous().view(batch_size, self.n_heads, query_sequence_pad_length, self.d_values).permute(0, 2, 1, 3)
+        # (N, クエリのパッド長, n_heads, d_values)
 
-		# 各ヘッドごとの出力（d_values次元）を連結する
-		sequences = sequences.contiguous().view(batch_size, query_sequence_pad_length, -1)
-		# (N, クエリのパッド長, n_heads * d_values)
+        # 各ヘッドごとの出力（d_values次元）を連結する
+        sequences = sequences.contiguous().view(batch_size, query_sequence_pad_length, -1)
+        # (N, クエリのパッド長, n_heads * d_values)
 
-		# 連結されたサブスペースのシーケンスを、線形変換して d_model 次元の出力に変換する
-		sequences = self.cast_output(sequences)
-		# (N, クエリのパッド長, d_model)
+        # 連結されたサブスペースのシーケンスを、線形変換して d_model 次元の出力に変換する
+        sequences = self.cast_output(sequences)
+        # (N, クエリのパッド長, d_model)
 
-		# ドロップアウトと残差接続を適用
-		sequences = self.apply_dropout(sequences) + input_to_add
-		# (N, クエリのパッド長, d_model)
+        # ドロップアウトと残差接続を適用
+        sequences = self.apply_dropout(sequences) + input_to_add
+        # (N, クエリのパッド長, d_model)
 
-		return sequences
+        return sequences
 
 
 class PositionWiseFCNetwork(nn.Module):
